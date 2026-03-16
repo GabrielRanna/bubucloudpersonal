@@ -1,6 +1,6 @@
 # Bubu Cloud Personal
 
-Transforme um HD comum em uma nuvem pessoal acessivel pela internet, com interface web, upload com progresso e administracao simples em Windows e macOS.
+Transforme um HD comum em uma nuvem pessoal acessivel pela internet, com interface web, upload com progresso e administracao simples em Windows, com uma release separada para macOS.
 
 ## O que este projeto entrega
 
@@ -12,7 +12,7 @@ Transforme um HD comum em uma nuvem pessoal acessivel pela internet, com interfa
 - assets do editor Ace servidos localmente, sem depender de CDN
 - rename que preserva extensao de arquivo
 - cadastro e login funcionando com senha publica amigavel, mesmo com as regras rigidas internas do `File Browser`
-- bootstrap automatico de binarios para Windows e macOS
+- release separada para macOS com scripts `.command`
 
 ## Por que isso e legal
 
@@ -29,17 +29,20 @@ Em vez de deixar um HD de 1 TB parado, a ideia aqui e transformar a maquina em u
 - `cloudflared`: exposicao publica da maquina
 - `gateway.py`: proxy, autenticao publica, upload customizado e correcoes de UX
 - `public-url-monitor.ps1`: monitor visual da URL publica
-- scripts PowerShell para subir, parar, instalar dependencias e inspecionar a stack
+- scripts PowerShell para a stack principal no Windows
+- bundle separado de macOS com scripts `.command`
 
 ## Arquivos principais
 
 - `start-cloud.ps1`: sobe `File Browser`, gateway, tunnel e monitor
 - `stop-cloud.ps1`: derruba a stack inteira
 - `status-cloud.ps1`: mostra status local e publico
-- `install-deps.ps1`: baixa `File Browser` e `cloudflared` para o sistema atual
+- `install-deps.ps1`: baixa `File Browser` e `cloudflared` para a stack Windows
 - `gateway.py`: proxy local + pagina de upload + ajustes do frontend
 - `public-url-monitor.ps1`: janela que exibe a URL publica ativa
 - `cloud-common.ps1`: configuracoes compartilhadas e arquivos de status
+- `macos-release/`: bundle base da release separada de macOS
+- `build-macos-release.ps1`: monta uma pasta pronta para publicar a release de macOS
 
 ## Como usar
 
@@ -51,21 +54,20 @@ Em vez de deixar um HD de 1 TB parado, a ideia aqui e transformar a maquina em u
 6. Use a raiz do `File Browser` para navegar
 7. Use `/upload-progress` para uploads grandes com barra de progresso
 
-## Windows e macOS
+## Release de macOS
 
-- Windows: usa monitor visual com janela flutuante
-- macOS: usa `pwsh`, instala binarios nativos e funciona sem depender de `.exe`
-- macOS: o monitor visual cai para modo texto, e `status-cloud.ps1` continua mostrando a URL ativa
-- caminho padrao dos arquivos:
-  - Windows: `D:\CloudDrive` quando existe, senao `~/CloudDrive`
-  - macOS: `~/CloudDrive`
+- o macOS agora sai como release separada
+- essa release usa scripts `.command`
+- ela nao depende de `pwsh`
+- o bundle fica em `macos-release/` e pode ser montado em `dist/` via `build-macos-release.ps1`
+- o caminho padrao dos arquivos no Mac e `~/CloudDrive`
 
-## Primeira instalacao no Mac
+## Como montar a release de macOS
 
-1. Instale `pwsh`
-2. Instale `python3`
-3. Rode `pwsh ./start-cloud.ps1`
-4. Se preferir baixar as dependencias antes, rode `pwsh ./install-deps.ps1`
+1. Rode `build-macos-release.ps1`
+2. Pegue a pasta gerada em `dist/BubuCloudPersonal-macos`
+3. No Mac, rode `start-cloud.command`
+4. Se preferir baixar as dependencias antes, rode `install-deps.command`
 
 ## Destaques de implementacao
 
@@ -73,7 +75,7 @@ Em vez de deixar um HD de 1 TB parado, a ideia aqui e transformar a maquina em u
 - o gateway corrige pontos praticos do `File Browser` sem precisar manter um fork completo
 - o login publico do admin e simples para uso diario, mas o backend continua usando credenciais fortes
 - o cadastro de usuarios traduz senhas normais para senhas internas seguras
-- os scripts resolvem caminhos e binarios de forma diferente conforme o sistema operacional
+- o projeto agora tem distribuicao separada para Windows e macOS
 
 ## Limites atuais
 
@@ -87,5 +89,6 @@ Projeto funcional e em uso real, com foco em:
 
 - experiencia melhor no navegador
 - uploads mais confiaveis
-- setup simples em Windows e macOS
+- setup simples no Windows
+- release dedicada para macOS
 - menos atrito para uso pessoal no dia a dia

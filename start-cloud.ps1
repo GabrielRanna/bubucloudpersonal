@@ -5,21 +5,27 @@ $cfg = Get-PersonalCloudConfig
 $localUrl = "http://127.0.0.1:$($cfg.PublicPort)"
 $internalFileBrowserUrl = "http://127.0.0.1:$($cfg.FileBrowserPort)"
 
-New-Item -ItemType Directory -Force -Path $cfg.BaseDir, $cfg.ConfigDir, $cfg.LogDir, $cfg.DataRoot | Out-Null
+Ensure-PersonalCloudBootstrap
 
 $fileBrowserPid = Read-PidFile -Path $cfg.FileBrowserPidFile
 if (-not $fileBrowserPid -or -not (Test-ProcessAlive -ProcessId $fileBrowserPid)) {
-  foreach ($proc in (Get-ProcessByCommandHint -ProcessName 'filebrowser.exe' -CommandHint $cfg.FileBrowserDb)) {
+  foreach ($proc in (Get-ProcessByCommandHint -ProcessName $cfg.FileBrowserProcessName -CommandHint $cfg.FileBrowserDb)) {
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
   }
 
-  $fileBrowserProc = Start-Process -FilePath $cfg.FileBrowserExe `
-    -ArgumentList @('-d', $cfg.FileBrowserDb, '-a', '127.0.0.1', '-p', "$($cfg.FileBrowserPort)") `
-    -WorkingDirectory (Split-Path -Path $cfg.FileBrowserExe -Parent) `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $cfg.FileBrowserStdOutLog `
-    -RedirectStandardError $cfg.FileBrowserStdErrLog `
-    -PassThru
+  $fileBrowserStart = @{
+    FilePath               = $cfg.FileBrowserExe
+    ArgumentList           = @('-d', $cfg.FileBrowserDb, '-a', '127.0.0.1', '-p', "$($cfg.FileBrowserPort)")
+    WorkingDirectory       = (Split-Path -Path $cfg.FileBrowserExe -Parent)
+    RedirectStandardOutput = $cfg.FileBrowserStdOutLog
+    RedirectStandardError  = $cfg.FileBrowserStdErrLog
+    PassThru               = $true
+  }
+  if ($cfg.IsWindows) {
+    $fileBrowserStart.WindowStyle = 'Hidden'
+  }
+
+  $fileBrowserProc = Start-Process @fileBrowserStart
   $fileBrowserProc.Id | Set-Content -LiteralPath $cfg.FileBrowserPidFile -Encoding Ascii
 }
 
@@ -36,7 +42,7 @@ if (-not (Test-LocalCloud -Url $internalFileBrowserUrl)) {
 
 $gatewayPid = Read-PidFile -Path $cfg.GatewayPidFile
 if (-not $gatewayPid -or -not (Test-ProcessAlive -ProcessId $gatewayPid)) {
-  foreach ($proc in (Get-ProcessByCommandHint -ProcessName 'python.exe' -CommandHint $cfg.GatewayScript)) {
+  foreach ($proc in (Get-ProcessByCommandHint -ProcessName $cfg.PythonProcessName -CommandHint $cfg.GatewayScript)) {
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
   }
 
@@ -46,13 +52,19 @@ if (-not $gatewayPid -or -not (Test-ProcessAlive -ProcessId $gatewayPid)) {
     }
   }
 
-  $gatewayProc = Start-Process -FilePath $cfg.PythonExe `
-    -ArgumentList @($cfg.GatewayScript) `
-    -WorkingDirectory $cfg.BaseDir `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $cfg.GatewayLog `
-    -RedirectStandardError $cfg.GatewayErrLog `
-    -PassThru
+  $gatewayStart = @{
+    FilePath               = $cfg.PythonExe
+    ArgumentList           = @($cfg.GatewayScript)
+    WorkingDirectory       = $cfg.BaseDir
+    RedirectStandardOutput = $cfg.GatewayLog
+    RedirectStandardError  = $cfg.GatewayErrLog
+    PassThru               = $true
+  }
+  if ($cfg.IsWindows) {
+    $gatewayStart.WindowStyle = 'Hidden'
+  }
+
+  $gatewayProc = Start-Process @gatewayStart
   $gatewayProc.Id | Set-Content -LiteralPath $cfg.GatewayPidFile -Encoding Ascii
 }
 
@@ -69,7 +81,7 @@ if (-not (Test-LocalCloud -Url $localUrl)) {
 
 $cloudflaredPid = Read-PidFile -Path $cfg.CloudflaredPidFile
 if (-not $cloudflaredPid -or -not (Test-ProcessAlive -ProcessId $cloudflaredPid)) {
-  $existingTunnel = Get-ProcessByCommandHint -ProcessName 'cloudflared.exe' -CommandHint "http://127.0.0.1:$($cfg.PublicPort)"
+  $existingTunnel = Get-ProcessByCommandHint -ProcessName $cfg.CloudflaredProcessName -CommandHint "http://127.0.0.1:$($cfg.PublicPort)"
   if ($existingTunnel) {
     foreach ($proc in $existingTunnel) {
       Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
@@ -82,8 +94,9 @@ if (-not $cloudflaredPid -or -not (Test-ProcessAlive -ProcessId $cloudflaredPid)
     }
   }
 
-  $cloudflaredProc = Start-Process -FilePath $cfg.CloudflaredExe `
-    -ArgumentList @(
+  $cloudflaredStart = @{
+    FilePath               = $cfg.CloudflaredExe
+    ArgumentList           = @(
       'tunnel'
       '--url'
       $localUrl
@@ -92,12 +105,17 @@ if (-not $cloudflaredPid -or -not (Test-ProcessAlive -ProcessId $cloudflaredPid)
       "127.0.0.1:$($cfg.CloudflaredMetricsPort)"
       '--loglevel'
       'info'
-    ) `
-    -WorkingDirectory (Split-Path -Path $cfg.CloudflaredExe -Parent) `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $cfg.CloudflaredStdOutLog `
-    -RedirectStandardError $cfg.CloudflaredStdErrLog `
-    -PassThru
+    )
+    WorkingDirectory       = (Split-Path -Path $cfg.CloudflaredExe -Parent)
+    RedirectStandardOutput = $cfg.CloudflaredStdOutLog
+    RedirectStandardError  = $cfg.CloudflaredStdErrLog
+    PassThru               = $true
+  }
+  if ($cfg.IsWindows) {
+    $cloudflaredStart.WindowStyle = 'Hidden'
+  }
+
+  $cloudflaredProc = Start-Process @cloudflaredStart
   $cloudflaredProc.Id | Set-Content -LiteralPath $cfg.CloudflaredPidFile -Encoding Ascii
 }
 
@@ -113,17 +131,32 @@ for ($i = 0; $i -lt 45; $i++) {
 Write-ConnectionInfo -PublicUrl $publicUrl
 
 $monitorPid = Read-PidFile -Path $cfg.PublicUrlMonitorPidFile
-if (-not $monitorPid -or -not (Test-ProcessAlive -ProcessId $monitorPid)) {
-  foreach ($proc in (Get-ProcessByCommandHint -ProcessName 'powershell.exe' -CommandHint $cfg.PublicUrlMonitorScript)) {
-    Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-  }
+if ($cfg.SupportsMonitorUi) {
+  if (-not $monitorPid -or -not (Test-ProcessAlive -ProcessId $monitorPid)) {
+    foreach ($proc in (Get-ProcessByCommandHint -ProcessName $cfg.PowerShellProcessName -CommandHint $cfg.PublicUrlMonitorScript)) {
+      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 
-  $monitorProc = Start-Process -FilePath $cfg.PowerShellExe `
-    -ArgumentList @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $cfg.PublicUrlMonitorScript) `
-    -WorkingDirectory $cfg.BaseDir `
-    -WindowStyle Hidden `
-    -PassThru
-  $monitorProc.Id | Set-Content -LiteralPath $cfg.PublicUrlMonitorPidFile -Encoding Ascii
+    $monitorArgs = @('-NoProfile', '-File', $cfg.PublicUrlMonitorScript)
+    if ($cfg.IsWindows) {
+      $monitorArgs = @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $cfg.PublicUrlMonitorScript)
+    }
+
+    $monitorStart = @{
+      FilePath         = $cfg.PowerShellExe
+      ArgumentList     = $monitorArgs
+      WorkingDirectory = $cfg.BaseDir
+      PassThru         = $true
+    }
+    if ($cfg.IsWindows) {
+      $monitorStart.WindowStyle = 'Hidden'
+    }
+
+    $monitorProc = Start-Process @monitorStart
+    $monitorProc.Id | Set-Content -LiteralPath $cfg.PublicUrlMonitorPidFile -Encoding Ascii
+  }
+} else {
+  Write-Host 'Monitor visual nao e iniciado automaticamente fora do Windows. Use status-cloud.ps1 para consultar a URL.'
 }
 
 Write-Host "Local URL: $localUrl"

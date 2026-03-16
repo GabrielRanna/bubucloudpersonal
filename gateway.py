@@ -14,8 +14,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-BASE_DIR = Path.home() / "PersonalCloud"
-DATA_ROOT = Path("D:/CloudDrive").resolve()
+BASE_DIR = Path(__file__).resolve().parent
 BACKEND_HOST = "127.0.0.1"
 BACKEND_PORT = 8396
 LISTEN_HOST = "0.0.0.0"
@@ -28,7 +27,6 @@ MAX_UPLOAD = 20 * 1024 * 1024 * 1024
 CHUNK_BYTES = 1 * 1024 * 1024
 MAX_CHUNK_BYTES = 32 * 1024 * 1024
 PASSWORD_HASH_ITERATIONS = 200_000
-UPLOAD_PARTS_DIR = DATA_ROOT / ".pc-upload-parts"
 ACE_CACHE_DIR = BASE_DIR / "ace-cache"
 ACE_REMOTE_BASE = b"https://cdn.jsdelivr.net/npm/ace-builds@${ge.version}/src-min-noconflict/"
 ACE_LOCAL_BASE = b"/__ace__/${ge.version}/"
@@ -51,6 +49,8 @@ def load_setting(key, default=None):
 USERNAME = "cloud"
 PASSWORD = load_setting("Senha")
 FILEBROWSER_PASSWORD = load_setting("SenhaInternaFileBrowser", PASSWORD)
+DATA_ROOT = Path(load_setting("Pasta da nuvem", str(Path.home() / "CloudDrive"))).expanduser().resolve()
+UPLOAD_PARTS_DIR = DATA_ROOT / ".pc-upload-parts"
 
 
 def cleanup_sessions():

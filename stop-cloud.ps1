@@ -6,22 +6,22 @@ $cfg = Get-PersonalCloudConfig
 $targets = @(
   @{
     PidFile = $cfg.PublicUrlMonitorPidFile
-    Name = 'powershell.exe'
+    Name = $cfg.PowerShellProcessName
     Hint = $cfg.PublicUrlMonitorScript
   }
   @{
     PidFile = $cfg.CloudflaredPidFile
-    Name = 'cloudflared.exe'
+    Name = $cfg.CloudflaredProcessName
     Hint = "http://127.0.0.1:$($cfg.PublicPort)"
   }
   @{
     PidFile = $cfg.GatewayPidFile
-    Name = 'python.exe'
+    Name = $cfg.PythonProcessName
     Hint = $cfg.GatewayScript
   }
   @{
     PidFile = $cfg.FileBrowserPidFile
-    Name = 'filebrowser.exe'
+    Name = $cfg.FileBrowserProcessName
     Hint = $cfg.FileBrowserDb
   }
 )

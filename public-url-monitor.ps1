@@ -1,9 +1,5 @@
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
 . "$PSScriptRoot\cloud-common.ps1"
-
-[System.Windows.Forms.Application]::EnableVisualStyles()
 
 $cfg = Get-PersonalCloudConfig
 $script:LastPublicUrl = '__unset__'
@@ -33,6 +29,39 @@ function Get-UploadUrl {
 
   return "http://127.0.0.1:$($cfg.PublicPort)/upload-progress"
 }
+
+function Cleanup-Monitor {
+  if (Test-Path -LiteralPath $cfg.PublicUrlMonitorPidFile) {
+    Remove-Item -LiteralPath $cfg.PublicUrlMonitorPidFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
+if (-not $cfg.IsWindows) {
+  try {
+    while (Test-CloudRunning) {
+      $publicUrl = Get-QuickTunnelUrl
+      $uploadUrl = Get-UploadUrl -PublicUrl $publicUrl
+      if ($publicUrl -ne $script:LastPublicUrl) {
+        Write-ConnectionInfo -PublicUrl $publicUrl
+        if ($publicUrl) {
+          Write-Host "URL publica: $publicUrl"
+          Write-Host "Upload: $uploadUrl"
+        } else {
+          Write-Host 'Tunnel ativo, aguardando endereco publico...'
+        }
+        $script:LastPublicUrl = $publicUrl
+      }
+      Start-Sleep -Seconds 3
+    }
+  } finally {
+    Cleanup-Monitor
+  }
+  return
+}
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Nuvem Pessoal'
@@ -155,7 +184,7 @@ $openUrl.Add_Click({
     "http://127.0.0.1:$($cfg.PublicPort)/upload-progress"
   }
 
-  Start-Process $target
+  Open-CloudUrl -Url $target
 })
 
 $closeButton.Add_Click({
@@ -179,9 +208,7 @@ $form.Add_Shown({
 
 $form.Add_FormClosed({
   $timer.Stop()
-  if (Test-Path -LiteralPath $cfg.PublicUrlMonitorPidFile) {
-    Remove-Item -LiteralPath $cfg.PublicUrlMonitorPidFile -Force -ErrorAction SilentlyContinue
-  }
+  Cleanup-Monitor
 })
 
 [System.Windows.Forms.Application]::Run($form)

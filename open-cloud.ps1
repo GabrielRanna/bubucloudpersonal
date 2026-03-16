@@ -5,7 +5,7 @@ $cfg = Get-PersonalCloudConfig
 $publicUrl = Get-QuickTunnelUrl
 
 if ($publicUrl) {
-  Start-Process "$publicUrl/upload-progress"
+  Open-CloudUrl -Url "$publicUrl/upload-progress"
 } else {
-  Start-Process "http://127.0.0.1:$($cfg.PublicPort)/upload-progress"
+  Open-CloudUrl -Url "http://127.0.0.1:$($cfg.PublicPort)/upload-progress"
 }

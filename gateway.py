@@ -154,30 +154,40 @@ PAGE = """<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Upload com progresso</title>
 <style>
-body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f4efe5;color:#1f2933}
+:root{color-scheme:light;--bg:#f4efe5;--bg-glow:#ffffff;--text:#1f2933;--panel:#ffffff;--panel-alt:#f9f4ea;--border:#eadfce;--border-strong:#d9cdbb;--muted:#5d6b78;--hero-a:#1463ff;--hero-b:#18a05e;--drop-bg:#eef4ff;--drop-drag:#dbe8ff;--drop-border:#8fb0ec;--pill:#fff1c7;--pill-text:#7a5200;--ok-bg:#d8f5e4;--ok-text:#14663f;--err-bg:#fee4e2;--err-text:#b42318;--bar-bg:#dbe3ee;--bar-fill-a:#1463ff;--bar-fill-b:#1eb96d;--shadow:0 14px 36px rgba(0,0,0,.08)}
+:root[data-theme=dark]{color-scheme:dark;--bg:#10161d;--bg-glow:#1d2733;--text:#edf2f7;--panel:#18212b;--panel-alt:#121b24;--border:#2a3948;--border-strong:#3a4b5d;--muted:#a9b8c7;--hero-a:#0f62fe;--hero-b:#087f5b;--drop-bg:#132535;--drop-drag:#1a3145;--drop-border:#4b78a8;--pill:#3e3410;--pill-text:#f7d774;--ok-bg:#113924;--ok-text:#7ee2ac;--err-bg:#47151a;--err-text:#ff8d8d;--bar-bg:#243444;--bar-fill-a:#6ea6ff;--bar-fill-b:#4fe29e;--shadow:0 18px 40px rgba(0,0,0,.32)}
+html,body{min-height:100%}
+body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:radial-gradient(circle at top,var(--bg-glow) 0%,var(--bg) 42%);color:var(--text);transition:background .2s ease,color .2s ease}
 .wrap{max-width:1040px;margin:24px auto;padding:0 16px}
-.hero,.card{background:#fff;border-radius:24px;box-shadow:0 14px 36px rgba(0,0,0,.08);padding:22px}
-.hero{background:linear-gradient(135deg,#1463ff,#18a05e);color:#fff}
+.hero,.card{background:var(--panel);border-radius:24px;box-shadow:var(--shadow);padding:22px;border:1px solid rgba(255,255,255,.02);transition:background .2s ease,border-color .2s ease,box-shadow .2s ease}
+.hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));color:#fff;position:relative;overflow:hidden}
+.hero:after{content:"";position:absolute;inset:auto -80px -110px auto;width:240px;height:240px;background:rgba(255,255,255,.12);border-radius:50%}
+.hero-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.hero-copy{max-width:650px;position:relative;z-index:1}
+.theme-switcher{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1}
+.theme-switcher button{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);color:#fff}
+.theme-switcher button.active{background:#fff;color:#12324c}
 .grid{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:18px}
-label{display:block;margin:12px 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5d6b78}
-input[type=text],input[type=password]{width:100%;padding:12px 14px;border:1px solid #d9cdbb;border-radius:14px;background:#fff;font:inherit}
+label{display:block;margin:12px 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input[type=text],input[type=password]{width:100%;padding:12px 14px;border:1px solid var(--border-strong);border-radius:14px;background:var(--panel);color:var(--text);font:inherit}
 button,a.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;border:0;background:#1463ff;color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
-button.alt,a.alt{background:#fff;color:#1f2933;border:1px solid #d9cdbb}
+button.alt,a.alt{background:var(--panel);color:var(--text);border:1px solid var(--border-strong)}
 button:disabled{opacity:.55;cursor:not-allowed}
 .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
-.drop{margin-top:14px;min-height:170px;border:2px dashed #8fb0ec;border-radius:22px;display:grid;place-items:center;text-align:center;background:#eef4ff;padding:18px}
-.drop.drag{background:#dbe8ff}
-.pill{display:inline-flex;padding:8px 12px;border-radius:999px;background:#fff1c7;color:#7a5200;font-size:13px;font-weight:700}
-.ok{background:#d8f5e4;color:#14663f}.err{background:#fee4e2;color:#b42318}
+.drop{margin-top:14px;min-height:170px;border:2px dashed var(--drop-border);border-radius:22px;display:grid;place-items:center;text-align:center;background:var(--drop-bg);padding:18px}
+.drop.drag{background:var(--drop-drag)}
+.pill{display:inline-flex;padding:8px 12px;border-radius:999px;background:var(--pill);color:var(--pill-text);font-size:13px;font-weight:700}
+.ok{background:var(--ok-bg);color:var(--ok-text)}.err{background:var(--err-bg);color:var(--err-text)}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
-.stat{background:#fff;border:1px solid #eadfce;border-radius:18px;padding:14px}.stat strong{display:block;font-size:24px;margin-top:6px}
-.bar{height:14px;border-radius:999px;background:#dbe3ee;overflow:hidden;margin-top:10px}.fill{height:100%;width:0;background:linear-gradient(90deg,#1463ff,#1eb96d)}
-.queue{margin-top:18px;border:1px solid #eadfce;border-radius:20px;overflow:hidden;background:#fff}.head,.row{display:grid;grid-template-columns:2fr 1.3fr 120px;gap:12px;padding:14px 16px;align-items:center}
-.head{background:#f9f4ea;font-size:12px;font-weight:700;color:#5d6b78;text-transform:uppercase;letter-spacing:.08em}.row{border-top:1px solid #f0e7da}.name{font-weight:700;word-break:break-word}.sub{font-size:13px;color:#5d6b78;margin-top:4px;word-break:break-word}.state{text-align:right;font-size:13px;font-weight:700}.state.ok{color:#14663f}.state.err{color:#b42318}
-.hidden{display:none!important}.muted{font-size:14px;color:#5d6b78}
-@media(max-width:900px){.grid{grid-template-columns:1fr}} @media(max-width:640px){.stats{grid-template-columns:1fr}.head,.row{grid-template-columns:1fr}.state{text-align:left}}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:14px}.stat strong{display:block;font-size:24px;margin-top:6px}
+.bar{height:14px;border-radius:999px;background:var(--bar-bg);overflow:hidden;margin-top:10px}.fill{height:100%;width:0;background:linear-gradient(90deg,var(--bar-fill-a),var(--bar-fill-b))}
+.queue{margin-top:18px;border:1px solid var(--border);border-radius:20px;overflow:hidden;background:var(--panel)}.head,.row{display:grid;grid-template-columns:2fr 1.3fr 120px;gap:12px;padding:14px 16px;align-items:center}
+.head{background:var(--panel-alt);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.row{border-top:1px solid var(--border)}.name{font-weight:700;word-break:break-word}.sub{font-size:13px;color:var(--muted);margin-top:4px;word-break:break-word}.state{text-align:right;font-size:13px;font-weight:700}.state.ok{color:var(--ok-text)}.state.err{color:var(--err-text)}
+.hidden{display:none!important}.muted{font-size:14px;color:var(--muted)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.hero-top{flex-direction:column;align-items:flex-start}}
+@media(max-width:640px){.stats{grid-template-columns:1fr}.head,.row{grid-template-columns:1fr}.state{text-align:left}}
 </style></head><body><div class="wrap">
-<section class="hero"><h1 style="margin:0 0 8px;font-size:40px;line-height:1">Upload com progresso</h1><p style="margin:0;max-width:650px">Envie arquivos para a sua nuvem com progresso por arquivo e progresso geral. Arquivos grandes sao enviados em partes menores para evitar travamentos na URL publica.</p></section>
+<section class="hero"><div class="hero-top"><div class="hero-copy"><h1 style="margin:0 0 8px;font-size:40px;line-height:1">Upload com progresso</h1><p style="margin:0;max-width:650px">Envie arquivos para a sua nuvem com progresso por arquivo e progresso geral. Arquivos grandes sao enviados em partes menores para evitar travamentos na URL publica.</p></div><div class="theme-switcher"><button id="themeLight" type="button">Claro</button><button id="themeDark" type="button">Escuro</button></div></div></section>
 <section class="grid">
 <aside class="card">
 <h2 style="margin-top:0">Acesso</h2><div id="status" class="pill">Verificando sessao...</div>
@@ -200,13 +210,17 @@ button:disabled{opacity:.55;cursor:not-allowed}
 </main></section></div>
 <script>
 const CHUNK_BYTES=1*1024*1024;
+const THEME_KEY="pc-upload-theme";
 const s={auth:false,uploading:false,queue:[],done:0,total:0};
-const r={status:status,user:user,pass:pass,login:login,logout:logout,dest:dest,overwrite:overwrite,pickFiles:pickFiles,pickFolder:pickFolder,files:files,folders:folders,send:send,clear:clear,drop:drop,count:count,total:total,sent:sent,overall:overall,overallText:overallText,rows:rows};
+const r={status:status,user:user,pass:pass,login:login,logout:logout,dest:dest,overwrite:overwrite,pickFiles:pickFiles,pickFolder:pickFolder,files:files,folders:folders,send:send,clear:clear,drop:drop,count:count,total:total,sent:sent,overall:overall,overallText:overallText,rows:rows,themeLight:themeLight,themeDark:themeDark};
 function fmt(n){if(!n)return"0 B";const u=["B","KB","MB","GB","TB"];let i=0,v=n;while(v>=1024&&i<u.length-1){v/=1024;i++}return `${v.toFixed(v>=10||i===0?0:1)} ${u[i]}`}
 function slash(v){return (v||"").split("\\\\").join("/")}
 function norm(v){v=slash(v).trim();if(!v)return"/Uploads";v="/"+v.replace(/^\/+/, "").replace(/\/+/g,"/");return v.endsWith("/")&&v.length>1?v.slice(0,-1):v}
 function join(base,rel){return `${norm(base).replace(/^\/+/, "")}/${slash(rel).replace(/^\/+/, "")}`.replace(/\/+/g,"/")}
 function makeUploadId(){return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`}
+function applyTheme(theme){document.documentElement.dataset.theme=theme;r.themeLight.classList.toggle("active",theme==="light");r.themeDark.classList.toggle("active",theme==="dark")}
+function loadTheme(){const stored=localStorage.getItem(THEME_KEY);return stored==="dark"?"dark":"light"}
+function setTheme(theme){localStorage.setItem(THEME_KEY,theme);applyTheme(theme)}
 function setStatus(text,kind=""){r.status.textContent=text;r.status.className=`pill${kind?` ${kind}`:""}`}
 function current(){return s.queue.filter(x=>x.state==="uploading").reduce((a,x)=>a+x.current,0)}
 function refresh(){const sent=s.done+current();const pct=s.total?Math.min(100,Math.round(sent/s.total*100)):0;r.count.textContent=String(s.queue.length);r.total.textContent=fmt(s.total);r.sent.textContent=fmt(sent);r.overall.style.width=`${pct}%`;r.overallText.textContent=s.uploading?`Enviando ${fmt(sent)} de ${fmt(s.total)} (${pct}%).`:(s.queue.length?"Fila pronta para envio.":"Nenhum upload em andamento.");r.send.disabled=s.uploading||!s.queue.length}
@@ -223,10 +237,11 @@ async function uploadChunkWithRetry(item,base,overwrite,uploadId,offset,blob,par
 async function uploadOne(item,base,overwrite){if(item.file.size===0){await uploadWhole(item,base,overwrite);item.current=0;item.pct=100;item.state="done";item.msg="Concluido";s.done+=item.file.size;draw();return}const uploadId=makeUploadId();let offset=0;let part=0;while(offset<item.file.size){part+=1;const blob=item.file.slice(offset, Math.min(offset+CHUNK_BYTES,item.file.size));item.state="uploading";item.current=offset;item.pct=Math.min(100,Math.round(item.current/item.file.size*100));item.msg=item.parts>1?`Parte ${part}/${item.parts}`:"Enviando";draw();await waitPaint();await uploadChunkWithRetry(item,base,overwrite,uploadId,offset,blob,part);offset+=blob.size;item.current=offset;item.pct=Math.min(100,Math.round(item.current/item.file.size*100));item.state="uploading";item.msg=offset<item.file.size?`Parte ${part}/${item.parts}`:"Finalizando";draw();await waitPaint()}item.current=item.file.size;item.pct=100;item.state="done";item.msg="Concluido";s.done+=item.file.size;draw()}
 async function sendAll(){if(!s.auth){setStatus("Entre antes de enviar arquivos.","err");return}if(!s.queue.length){setStatus("Adicione arquivos na fila primeiro.","err");return}setUploading(true);setStatus("Upload em andamento...","ok");s.done=s.queue.filter(x=>x.state==="done").reduce((a,x)=>a+x.file.size,0);const base=norm(r.dest.value);const overwrite=r.overwrite.checked;try{for(const item of s.queue){if(item.state==="done")continue;item.pct=0;item.current=0;item.state="pending";item.msg="Na fila"}draw();for(const item of s.queue){if(item.state==="done")continue;await uploadOne(item,base,overwrite)}setStatus("Todos os arquivos foram enviados.","ok")}catch(err){setStatus(err.message,"err")}finally{setUploading(false)}}
 function clearQueue(){s.queue=[];s.done=0;s.total=0;r.files.value="";r.folders.value="";draw()}
+r.themeLight.onclick=()=>setTheme("light");r.themeDark.onclick=()=>setTheme("dark");
 r.pickFiles.onclick=()=>r.files.click();r.pickFolder.onclick=()=>r.folders.click();r.files.onchange=e=>add(e.target.files);r.folders.onchange=e=>add(e.target.files);r.login.onclick=doLogin;r.logout.onclick=doLogout;r.send.onclick=sendAll;r.clear.onclick=clearQueue;
 ["dragenter","dragover"].forEach(t=>r.drop.addEventListener(t,e=>{e.preventDefault();r.drop.classList.add("drag")}));
 ["dragleave","drop"].forEach(t=>r.drop.addEventListener(t,e=>{e.preventDefault();r.drop.classList.remove("drag")}));
-r.drop.addEventListener("drop", e=>add(e.dataTransfer.files));draw();session().catch(()=>setStatus("Nao foi possivel validar a sessao.","err"));
+r.drop.addEventListener("drop", e=>add(e.dataTransfer.files));applyTheme(loadTheme());draw();session().catch(()=>setStatus("Nao foi possivel validar a sessao.","err"));
 </script></body></html>"""
 
 

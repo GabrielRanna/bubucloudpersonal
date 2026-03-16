@@ -1,0 +1,15 @@
+bin/
+config/
+logs/
+__pycache__/
+*.pyc
+*.pyo
+*.zip
+*.pid
+*.db
+credentials.txt
+connection-info.txt
+*.log
+0-COMECE-AQUI.txt
+MINHA-NUVEM.txt
+ABRIR-MINHA-NUVEM.cmd

@@ -2,6 +2,7 @@ bin/
 config/
 logs/
 __pycache__/
+ace-cache/
 *.pyc
 *.pyo
 *.zip

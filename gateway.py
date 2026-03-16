@@ -1,11 +1,13 @@
 import http.client
 import json
+import mimetypes
 import os
 import posixpath
 import secrets
 import threading
 import time
 import urllib.parse
+import urllib.request
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +26,9 @@ MAX_UPLOAD = 20 * 1024 * 1024 * 1024
 CHUNK_BYTES = 1 * 1024 * 1024
 MAX_CHUNK_BYTES = 32 * 1024 * 1024
 UPLOAD_PARTS_DIR = DATA_ROOT / ".pc-upload-parts"
+ACE_CACHE_DIR = BASE_DIR / "ace-cache"
+ACE_REMOTE_BASE = b"https://cdn.jsdelivr.net/npm/ace-builds@${ge.version}/src-min-noconflict/"
+ACE_LOCAL_BASE = b"/__ace__/${ge.version}/"
 HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
 SESSIONS = {}
 LOCK = threading.Lock()
@@ -109,6 +114,40 @@ def stream_to_file(stream, destination, size, mode):
             remaining -= len(chunk)
     if remaining != 0:
         raise IOError("Upload interrompido")
+
+
+def parse_ace_request(path):
+    parts = [part for part in path.split("/") if part]
+    if len(parts) != 3 or parts[0] != "__ace__":
+        raise ValueError("Caminho do Ace invalido.")
+
+    version, filename = parts[1], parts[2]
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+    if not version or not filename or any(ch not in allowed for ch in version) or any(ch not in allowed for ch in filename):
+        raise ValueError("Arquivo do Ace invalido.")
+
+    return version, filename
+
+
+def ace_cache_path(version, filename):
+    return ACE_CACHE_DIR / version / filename
+
+
+def fetch_ace_asset(version, filename):
+    target = ace_cache_path(version, filename)
+    if target.exists():
+        return target.read_bytes()
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    quoted_version = urllib.parse.quote(version, safe="-_.")
+    quoted_filename = urllib.parse.quote(filename, safe="-_.")
+    url = f"https://cdn.jsdelivr.net/npm/ace-builds@{quoted_version}/src-min-noconflict/{quoted_filename}"
+
+    with urllib.request.urlopen(url, timeout=30) as response:
+        payload = response.read()
+
+    target.write_bytes(payload)
+    return payload
 
 
 PAGE = """<!doctype html>
@@ -208,6 +247,8 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        if path.startswith("/__ace__/") and self.command in ("GET", "HEAD"):
+            return self.handle_ace_asset(path)
         if path == "/upload-progress" and self.command == "GET":
             return self.html(PAGE)
         if path == "/__session__" and self.command == "GET":
@@ -378,6 +419,27 @@ class Handler(BaseHTTPRequestHandler):
 
         self.reply_json(HTTPStatus.ACCEPTED, {"ok": True, "complete": False, "received": received, "path": expected["path"]})
 
+    def handle_ace_asset(self, path):
+        try:
+            version, filename = parse_ace_request(path)
+            payload = fetch_ace_asset(version, filename)
+        except ValueError as exc:
+            return self.reply_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+        except Exception as exc:
+            return self.reply_json(HTTPStatus.BAD_GATEWAY, {"error": f"Falha ao carregar asset do Ace: {exc}"})
+
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        if filename.endswith(".js"):
+            content_type = "application/javascript; charset=utf-8"
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(payload)
+
     def proxy(self):
         conn = http.client.HTTPConnection(BACKEND_HOST, BACKEND_PORT, timeout=120)
         headers = {}
@@ -399,6 +461,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply_json(HTTPStatus.BAD_GATEWAY, {"error": f"Proxy falhou: {exc}"})
         finally:
             conn.close()
+
+        content_type = res.getheader("Content-Type", "")
+        if self.path.endswith(".js") and "javascript" in content_type.lower() and ACE_REMOTE_BASE in payload:
+            payload = payload.replace(ACE_REMOTE_BASE, ACE_LOCAL_BASE)
+
         self.send_response(res.status, res.reason)
         for key, value in res.getheaders():
             lower = key.lower()

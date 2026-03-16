@@ -20,3 +20,5 @@ Setup local para uma nuvem pessoal em Windows com:
 - O projeto usa arquivos locais que nao entram no Git, como binarios, logs, PID files e credenciais.
 - A URL `trycloudflare` e temporaria e pode mudar ao reiniciar o tunnel.
 - Para uso fixo em producao, o ideal e trocar para um dominio proprio ou DDNS + port forwarding.
+
+# bubucloudpersonal

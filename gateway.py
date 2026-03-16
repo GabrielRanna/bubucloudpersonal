@@ -99,6 +99,49 @@ def relative_target(target):
     return str(target.relative_to(DATA_ROOT)).replace("\\", "/")
 
 
+def safe_resource_target(api_path):
+    prefix = "/api/resources"
+    if not api_path.startswith(prefix):
+        raise ValueError("Recurso invalido")
+    return safe_target(api_path[len(prefix):])
+
+
+def preserve_rename_extension(raw_path):
+    parsed = urllib.parse.urlparse(raw_path)
+    if parsed.path == "/api/resources" or not parsed.path.startswith("/api/resources/"):
+        return raw_path
+
+    query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    if query.get("action", [""])[0] != "rename":
+        return raw_path
+
+    destination_values = query.get("destination")
+    if not destination_values:
+        return raw_path
+
+    try:
+        source = safe_resource_target(parsed.path)
+        destination_raw = destination_values[0]
+        destination = safe_target(destination_raw)
+    except Exception:
+        return raw_path
+
+    if not source.exists() or not source.is_file():
+        return raw_path
+
+    suffix = "".join(source.suffixes)
+    if not suffix or Path(destination.name).suffix:
+        return raw_path
+
+    normalized = relative_target(destination.with_name(destination.name + suffix))
+    if destination_raw.startswith("/"):
+        normalized = "/" + normalized
+
+    query["destination"] = [normalized]
+    updated_query = urllib.parse.urlencode(query, doseq=True)
+    return urllib.parse.urlunparse(parsed._replace(query=updated_query))
+
+
 def partial_paths(upload_id):
     return UPLOAD_PARTS_DIR / f"{upload_id}.part", UPLOAD_PARTS_DIR / f"{upload_id}.json"
 
@@ -457,6 +500,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def proxy(self):
         conn = http.client.HTTPConnection(BACKEND_HOST, BACKEND_PORT, timeout=120)
+        request_path = preserve_rename_extension(self.path)
         headers = {}
         for key, value in self.headers.items():
             lower = key.lower()
@@ -469,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
         if length:
             body = self.rfile.read(int(length))
         try:
-            conn.request(self.command, self.path, body=body, headers=headers)
+            conn.request(self.command, request_path, body=body, headers=headers)
             res = conn.getresponse()
             payload = res.read()
         except Exception as exc:

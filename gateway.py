@@ -1,4 +1,5 @@
 import http.client
+import hashlib
 import json
 import mimetypes
 import os
@@ -20,11 +21,13 @@ BACKEND_PORT = 8396
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 8394
 CREDENTIALS_FILE = BASE_DIR / "credentials.txt"
+PUBLIC_AUTH_FILE = BASE_DIR / "config" / "public-user-auth.json"
 SESSION_COOKIE = "pc_upload_session"
 SESSION_TTL = 12 * 60 * 60
 MAX_UPLOAD = 20 * 1024 * 1024 * 1024
 CHUNK_BYTES = 1 * 1024 * 1024
 MAX_CHUNK_BYTES = 32 * 1024 * 1024
+PASSWORD_HASH_ITERATIONS = 200_000
 UPLOAD_PARTS_DIR = DATA_ROOT / ".pc-upload-parts"
 ACE_CACHE_DIR = BASE_DIR / "ace-cache"
 ACE_REMOTE_BASE = b"https://cdn.jsdelivr.net/npm/ace-builds@${ge.version}/src-min-noconflict/"
@@ -32,17 +35,22 @@ ACE_LOCAL_BASE = b"/__ace__/${ge.version}/"
 HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
 SESSIONS = {}
 LOCK = threading.Lock()
+AUTH_LOCK = threading.Lock()
 
 
-def load_password():
+def load_setting(key, default=None):
+    prefix = f"{key}:"
     for line in CREDENTIALS_FILE.read_text(encoding="ascii", errors="ignore").splitlines():
-        if line.startswith("Senha:"):
+        if line.startswith(prefix):
             return line.split(":", 1)[1].strip()
-    raise RuntimeError("Senha nao encontrada")
+    if default is not None:
+        return default
+    raise RuntimeError(f"{key} nao encontrada")
 
 
 USERNAME = "cloud"
-PASSWORD = load_password()
+PASSWORD = load_setting("Senha")
+FILEBROWSER_PASSWORD = load_setting("SenhaInternaFileBrowser", PASSWORD)
 
 
 def cleanup_sessions():
@@ -140,6 +148,119 @@ def preserve_rename_extension(raw_path):
     query["destination"] = [normalized]
     updated_query = urllib.parse.urlencode(query, doseq=True)
     return urllib.parse.urlunparse(parsed._replace(query=updated_query))
+
+
+def rewrite_filebrowser_login(path, body):
+    if path != "/api/login" or not body:
+        return body
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return body
+
+    username = str(payload.get("username", "")).strip()
+    public_password = payload.get("password")
+    if not username or not isinstance(public_password, str):
+        return body
+
+    internal_password = resolve_internal_password(username, public_password)
+    if not internal_password or internal_password == public_password:
+        return body
+
+    payload["password"] = internal_password
+    return json.dumps(payload).encode("utf-8")
+
+
+def load_public_auth():
+    if not PUBLIC_AUTH_FILE.exists():
+        return {}
+    try:
+        payload = json.loads(PUBLIC_AUTH_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def save_public_auth(payload):
+    PUBLIC_AUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = PUBLIC_AUTH_FILE.with_suffix(".tmp")
+    temp_file.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
+    os.replace(temp_file, PUBLIC_AUTH_FILE)
+
+
+def hash_public_password(password, salt):
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("ascii"),
+        PASSWORD_HASH_ITERATIONS,
+    ).hex()
+
+
+def make_internal_password():
+    return f"Pc!{secrets.token_urlsafe(24)}Aa1"
+
+
+def remember_public_user(username, public_password, internal_password):
+    record = {
+        "internal_password": internal_password,
+        "password_hash": "",
+        "salt": secrets.token_hex(16),
+        "updated_at": int(time.time()),
+    }
+    record["password_hash"] = hash_public_password(public_password, record["salt"])
+
+    with AUTH_LOCK:
+        payload = load_public_auth()
+        payload[username] = record
+        save_public_auth(payload)
+
+
+def resolve_internal_password(username, public_password):
+    if username == USERNAME and public_password == PASSWORD:
+        return FILEBROWSER_PASSWORD
+
+    with AUTH_LOCK:
+        payload = load_public_auth()
+    record = payload.get(username)
+    if not isinstance(record, dict):
+        return None
+
+    salt = record.get("salt")
+    password_hash = record.get("password_hash")
+    internal_password = record.get("internal_password")
+    if not all(isinstance(value, str) and value for value in (salt, password_hash, internal_password)):
+        return None
+
+    candidate_hash = hash_public_password(public_password, salt)
+    if not secrets.compare_digest(candidate_hash, password_hash):
+        return None
+
+    return internal_password
+
+
+def rewrite_filebrowser_signup(path, body):
+    if path != "/api/signup" or not body:
+        return body, None
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return body, None
+
+    username = str(payload.get("username", "")).strip()
+    public_password = payload.get("password")
+    if not username or not isinstance(public_password, str) or not public_password:
+        return body, None
+
+    internal_password = make_internal_password()
+    payload["password"] = internal_password
+    return json.dumps(payload).encode("utf-8"), {
+        "internal_password": internal_password,
+        "public_password": public_password,
+        "username": username,
+    }
 
 
 def partial_paths(upload_id):
@@ -501,6 +622,8 @@ class Handler(BaseHTTPRequestHandler):
     def proxy(self):
         conn = http.client.HTTPConnection(BACKEND_HOST, BACKEND_PORT, timeout=120)
         request_path = preserve_rename_extension(self.path)
+        parsed = urllib.parse.urlparse(request_path)
+        signup_context = None
         headers = {}
         for key, value in self.headers.items():
             lower = key.lower()
@@ -512,6 +635,9 @@ class Handler(BaseHTTPRequestHandler):
         length = self.headers.get("Content-Length")
         if length:
             body = self.rfile.read(int(length))
+            body, signup_context = rewrite_filebrowser_signup(parsed.path, body)
+            body = rewrite_filebrowser_login(parsed.path, body)
+            headers["Content-Length"] = str(len(body))
         try:
             conn.request(self.command, request_path, body=body, headers=headers)
             res = conn.getresponse()
@@ -520,6 +646,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply_json(HTTPStatus.BAD_GATEWAY, {"error": f"Proxy falhou: {exc}"})
         finally:
             conn.close()
+
+        if signup_context and 200 <= res.status < 300:
+            try:
+                remember_public_user(
+                    signup_context["username"],
+                    signup_context["public_password"],
+                    signup_context["internal_password"],
+                )
+            except Exception as exc:
+                return self.reply_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"error": f"Cadastro criado, mas nao foi possivel ativar a senha publica: {exc}"},
+                )
 
         content_type = res.getheader("Content-Type", "")
         if self.path.endswith(".js") and "javascript" in content_type.lower() and ACE_REMOTE_BASE in payload:
